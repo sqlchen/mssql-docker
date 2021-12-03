@@ -1,0 +1,60 @@
+name: build developer
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: windows/mssql-server-windows-developer
+
+jobs:
+
+  build:
+
+    runs-on: windows-2019
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2.4.0
+      with:
+        repository: ${{ github.repository }}
+    
+    - name: Download SQL2019-SSEI-Dev.exe
+      uses: carlosperate/download-file-action@v1.0.3
+      id: download-poetry
+      with:
+        file-url: 'https://go.microsoft.com/fwlink/?linkid=866662'
+        file-name: 'SQL2019-SSEI-Dev.exe'
+        location: './windows/mssql-server-windows-developer'
+        
+    - name: Extract the .box and .exe files
+      run: Start-Process SQL2019-SSEI-Dev.exe -ArgumentList "/Action=Download /MEDIATYPE=CAB /QUIET" -Wait;
+
+    #- name: List files
+    #  run: cmd.exe /c "dir %USERPROFILE%\Downloads\"
+
+    - name: Move files into docker folder
+      run: cmd.exe /c "move /Y %USERPROFILE%\Downloads\*.* .\"
+
+    #- name: List files
+    #  run: dir
+      
+    #- name: Build the Docker image
+    #  run: docker build . --file dockerfile_1 --tag sqlchen/mssql-server-windows-developer:win2019
+
+    #- name: Docker Login
+    #  run: docker login -u ${{ secrets.USERNAME }} -p ${{ secrets.PASSWORD }}
+        
+    #- name: Push the Docker image
+    #  run: docker push --tag sqlchen/mssql-server-windows-developer:win2019
+
+    - uses: mr-smithers-excellent/docker-build-push@v5
+      name: Build & push Docker image
+      with:
+        image: sqlchen/mssql-server-windows-developer
+        tags: win2019, latest
+        registry: ${{ secrets.REPO }}
+        directory: windows/mssql-server-windows-developer
+        dockerfile: windows/mssql-server-windows-developer/dockerfile
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
