@@ -1,9 +1,14 @@
-FROM microsoft/windowsservercore
+# SQL Server 2019 Windows container dockerfile
+## Warning: Restarting windows container causes the machine key to change and hence if you have any encryption configured then restarting SQL On Windows containers
+## breaks the encryption key chain in SQL Server. 
 
-LABEL maintainer "Perry Skountrianos"
+# Download the SQL Developer from the following location  https://go.microsoft.com/fwlink/?linkid=866658 and extract the .exe files using the option: "Download Media"
+# Note: CORE edition does not include Full-text seaching and reporting service
+# .\SQL2019-SSEI-Expr.exe /Action=Download /MEDIATYPE=CORE /QUIET
+# or
+# .\SQL2019-SSEI-Expr.exe /Action=Download /MEDIATYPE=Advanced /QUIET
 
-# Download Links:
-ENV sql_express_download_url "https://go.microsoft.com/fwlink/?linkid=829176"
+FROM mcr.microsoft.com/windows/servercore:ltsc2019-amd64
 
 ENV sa_password="_" \
     attach_dbs="[]" \
@@ -14,16 +19,20 @@ SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPref
 
 # make install files accessible
 COPY start.ps1 /
+#COPY SQLEXPR_x64_ENU.exe /
+COPY SQLEXPRADV_x64_ENU.exe /
+
 WORKDIR /
 
-RUN Invoke-WebRequest -Uri $env:sql_express_download_url -OutFile sqlexpress.exe ; \
-        Start-Process -Wait -FilePath .\sqlexpress.exe -ArgumentList /qs, /x:setup ; \
+RUN Start-Process -Wait -FilePath .\SQLEXPRADV_x64_ENU.exe -ArgumentList /qs, /x:setup ; \
         .\setup\setup.exe /q /ACTION=Install /INSTANCENAME=SQLEXPRESS /FEATURES=SQLEngine /UPDATEENABLED=0 /SQLSVCACCOUNT='NT AUTHORITY\System' /SQLSYSADMINACCOUNTS='BUILTIN\ADMINISTRATORS' /TCPENABLED=1 /NPENABLED=0 /IACCEPTSQLSERVERLICENSETERMS ; \
-        Remove-Item -Recurse -Force sqlexpress.exe, setup
+        Remove-Item -Recurse -Force SQLEXPRADV_x64_ENU.exe, setup
 
 RUN stop-service MSSQL`$SQLEXPRESS ; \
-        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql14.SQLEXPRESS\mssqlserver\supersocketnetlib\tcp\ipall' -name tcpdynamicports -value '' ; \
-        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql14.SQLEXPRESS\mssqlserver\supersocketnetlib\tcp\ipall' -name tcpport -value 1433 ; \
-        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql14.SQLEXPRESS\mssqlserver\' -name LoginMode -value 2 ;
+        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql15.SQLEXPRESS\mssqlserver\supersocketnetlib\tcp\ipall' -name tcpdynamicports -value '' ; \
+        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql15.SQLEXPRESS\mssqlserver\supersocketnetlib\tcp\ipall' -name tcpport -value 1433 ; \
+        set-itemproperty -path 'HKLM:\software\microsoft\microsoft sql server\mssql15.SQLEXPRESS\mssqlserver\' -name LoginMode -value 2 ;
+
+HEALTHCHECK CMD [ "sqlcmd", "-Q", "select 1" ]
 
 CMD .\start -sa_password $env:sa_password -ACCEPT_EULA $env:ACCEPT_EULA -attach_dbs \"$env:attach_dbs\" -Verbose
